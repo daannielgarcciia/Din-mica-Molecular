@@ -20,7 +20,7 @@ Bibliotecas necesarias:pip install numpy matplotlib pandas numba
 Instalación
 
 Clona el repositorio:
-git clone https://github.com/username/dinamica_molecular.git
+git clone https://github.com/daannielgarcciia/Din-mica-Molecular.git
 cd dinamica_molecular
 
 
