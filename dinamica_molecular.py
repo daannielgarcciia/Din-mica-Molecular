@@ -5,7 +5,7 @@ import pandas as pd
 from numba import njit
 
 ### ============================= PARÁMETROS FÍSICOS ============================= ###
-N = 12 * 83 + 8  # ~10^3 partículas
+N = 12 * 83 + 8  # ~1004 partículas
 sigma = 3.4e-10
 T0 = 120
 A = 0.039948
@@ -23,6 +23,7 @@ dt_adi = dt * np.sqrt(epsilon / (m * sigma ** 2))
 rc = L_adi / 2
 rc_2 = rc ** 2
 V = (L_adi * sigma) ** 3
+vel_factor = np.sqrt(epsilon / m) / sigma  # Factor para convertir v* a m/s
 
 intervalo = 1  # Intervalo para guardar datos
 
@@ -54,7 +55,7 @@ def init_velocidades(N, T0, m):
     v -= np.mean(v, axis=0)
     v_rms = np.sqrt(3 * kB * T0 / m)
     v *= v_rms / np.sqrt(np.mean(np.sum(v**2, axis=1)))
-    return v
+    return v / vel_factor  # Convertir a adimensional para cálculos internos
 
 # Cálculo de la partícula imagen más cercana
 @njit
@@ -98,7 +99,7 @@ def calcular_fuerzas(pos, L):
                 F[i] += fij
                 F[j] -= fij
                 U += potencial_LJ(r)
-                virial += (1 / r**6)**2 - 0.5 * (1 / r**6) * r
+                virial += (1 / r**12) - 0.5 * (1 / r**6)  # Corregido
     return F, U, virial
 
 # Algoritmo de Verlet
@@ -114,11 +115,13 @@ def verlet(pos, vel, F, dt, L):
 
 # Energía cinética
 def energia_cinetica(vel, m, N):
-    return 0.5 * m * np.sum(vel**2) / N
+    vel_si = vel * vel_factor  # Convertir a m/s
+    return 0.5 * m * np.sum(vel_si**2) / N
 
 # Temperatura
 def temperatura(vel, m, N):
-    return np.sum(m * vel**2) / (3 * N * kB)
+    vel_si = vel * vel_factor  # Convertir a m/s
+    return np.sum(m * vel_si**2) / (3 * N * kB)
 
 # Presión
 def presion(T, virial, V, N):
@@ -126,7 +129,7 @@ def presion(T, virial, V, N):
 
 # Velocidad del centro de masa
 def velocidad_cm(vel):
-    return np.mean(vel, axis=0)
+    return np.linalg.norm(np.mean(vel, axis=0) * vel_factor)  # Convertir a m/s
 
 # Análisis de bloques
 def block_analisis(data, block_sizes):
@@ -314,7 +317,7 @@ for step in range(steps):
         Ep = U * epsilon / N
         Et = Ek + Ep
         P = presion(T, virial, V, N)
-        vcm = np.linalg.norm(velocidad_cm(vel))
+        vcm = velocidad_cm(vel)
         Ek_list.append(Ek)
         Ep_list.append(Ep)
         Et_list.append(Et)
@@ -324,7 +327,7 @@ for step in range(steps):
         
         for i, idx in enumerate(particulas_seleccionadas):
             particulas_pos[i].append(pos[idx].copy())
-            particulas_vel[i].append(vel[idx].copy() * np.sqrt(epsilon / m) / sigma)
+            particulas_vel[i].append(vel[idx].copy() * vel_factor)
         
         if step in safe_steps:
             instantes.append(pos.copy())
@@ -412,7 +415,7 @@ for step in range(steps_27):
         Ep = U_27 * epsilon / N_27
         Et = Ek + Ep
         P = presion(T, virial_27, V_27, N_27)
-        vcm = np.linalg.norm(velocidad_cm(vel_27))
+        vcm = velocidad_cm(vel_27)
         Ek_list_27.append(Ek)
         Ep_list_27.append(Ep)
         Et_list_27.append(Et)
@@ -422,7 +425,7 @@ for step in range(steps_27):
         
         for i, idx in enumerate(particulas_seleccionadas_27):
             particulas_pos_27[i].append(pos_27[idx].copy())
-            particulas_vel_27[i].append(vel_27[idx].copy() * np.sqrt(epsilon / m) / sigma)
+            particulas_vel_27[i].append(vel_27[idx].copy() * vel_factor)
         
         if step in safe_steps_27:
             instantes_27.append(pos_27.copy())
@@ -442,41 +445,41 @@ T_mean_27 = np.mean(T_list_27)
 P_mean_27 = np.mean(P_list_27)
 
 block_sizes = [1, 2, 5, 10, 20]
-Ek_varianzas = block_analisis(df['E_k'], block_sizes)
-Ep_varianzas = block_analisis(df['E_p'], block_sizes)
-Et_varianzas = block_analisis(df['E_t'], block_sizes)
-T_varianzas = block_analisis(df['T'], block_sizes)
-P_varianzas = block_analisis(df['P'], block_sizes)
+Ek_varianzas_27 = block_analisis(df_27['E_k'], block_sizes)
+Ep_varianzas_27 = block_analisis(df_27['E_p'], block_sizes)
+Et_varianzas_27 = block_analisis(df_27['E_t'], block_sizes)
+T_varianzas_27 = block_analisis(df_27['T'], block_sizes)
+P_varianzas_27 = block_analisis(df_27['P'], block_sizes)
 
 block_size = 2
-Ek_mean = np.mean(df['E_k'])
-Ek_err = np.sqrt(Ek_varianzas[block_sizes.index(block_size)])
-Ep_mean = np.mean(df['E_p'])
-Ep_err = np.sqrt(Ep_varianzas[block_sizes.index(block_size)])
-Et_mean = np.mean(df['E_t'])
-Et_err = np.sqrt(Et_varianzas[block_sizes.index(block_size)])
-T_mean = np.mean(df['T'])
-T_err = np.sqrt(T_varianzas[block_sizes.index(block_size)])
-P_mean = np.mean(df['P'])
-P_err = np.sqrt(P_varianzas[block_sizes.index(block_size)])
+Ek_mean_27 = np.mean(df_27['E_k'])
+Ek_err_27 = np.sqrt(Ek_varianzas_27[block_sizes.index(block_size)])
+Ep_mean_27 = np.mean(df_27['E_p'])
+Ep_err_27 = np.sqrt(Ep_varianzas_27[block_sizes.index(block_size)])
+Et_mean_27 = np.mean(df_27['E_t'])
+Et_err_27 = np.sqrt(Et_varianzas_27[block_sizes.index(block_size)])
+T_mean_27 = np.mean(df_27['T'])
+T_err_27 = np.sqrt(T_varianzas_27[block_sizes.index(block_size)])
+P_mean_27 = np.mean(df_27['P'])
+P_err_27 = np.sqrt(P_varianzas_27[block_sizes.index(block_size)])
 
 df2 = pd.DataFrame({
-    "Ek_mean": [Ek_mean], "Ek_err": [Ek_err], "Ek_varianza": [Ek_varianzas[block_sizes.index(block_size)]],
-    "Ep_mean": [Ep_mean], "Ep_err": [Ep_err], "Ep_varianza": [Ep_varianzas[block_sizes.index(block_size)]],
-    "Et_mean": [Et_mean], "Et_err": [Et_err], "Et_varianza": [Et_varianzas[block_sizes.index(block_size)]],
-    "T_mean": [T_mean], "T_err": [T_err], "T_varianza": [T_varianzas[block_sizes.index(block_size)]],
-    "P_mean": [P_mean], "P_err": [P_err], "P_varianza": [P_varianzas[block_sizes.index(block_size)]]
+    "Ek_mean": [Ek_mean_27], "Ek_err": [Ek_err_27], "Ek_varianza": [Ek_varianzas_27[block_sizes.index(block_size)]],
+    "Ep_mean": [Ep_mean_27], "Ep_err": [Ep_err_27], "Ep_varianza": [Ep_varianzas_27[block_sizes.index(block_size)]],
+    "Et_mean": [Et_mean_27], "Et_err": [Et_err_27], "Et_varianza": [Et_varianzas_27[block_sizes.index(block_size)]],
+    "T_mean": [T_mean_27], "T_err": [T_err_27], "T_varianza": [T_varianzas_27[block_sizes.index(block_size)]],
+    "P_mean": [P_mean_27], "P_err": [P_err_27], "P_varianza": [P_varianzas_27[block_sizes.index(block_size)]]
 })
 df2.to_excel("Medias_y_varianzas_N27.xlsx", index=False)
 
-print(f"Energía cinética media: {Ek_mean:.2e} ± {Ek_err:.2e} J/partícula")
-print(f"Energía potencial media: {Ep_mean:.2e} ± {Ep_err:.2e} J/partícula")
-print(f"Energía total media: {Et_mean:.2e} ± {Et_err:.2e} J/partícula")
-print(f"Temperatura media: {T_mean:.2e} ± {T_err:.2e} K")
-print(f"Presión media: {P_mean:.2e} ± {P_err:.2e} Pa")
+print(f"Energía cinética media: {Ek_mean_27:.2e} ± {Ek_err_27:.2e} J/partícula")
+print(f"Energía potencial media: {Ep_mean_27:.2e} ± {Ep_err_27:.2e} J/partícula")
+print(f"Energía total media: {Et_mean_27:.2e} ± {Et_err_27:.2e} J/partícula")
+print(f"Temperatura media: {T_mean_27:.2e} ± {T_err_27:.2e} K")
+print(f"Presión media: {P_mean_27:.2e} ± {P_err_27:.2e} Pa")
 
-Et_fluctuacion = np.std(df['E_t']) / abs(np.mean(df['E_t']))
-print(f"Fluctuación relativa de la energía total: {Et_fluctuacion:.2e} (debería ser pequeña, e.g., < 0.01)")
+Et_fluctuacion_27 = np.std(df_27['E_t']) / abs(np.mean(df_27['E_t']))
+print(f"Fluctuación relativa de la energía total: {Et_fluctuacion_27:.2e} (debería ser pequeña, e.g., < 0.01)")
 
 print(f"Resultados N=27: E_k = {Ek_mean_27:.2e}, E_p = {Ep_mean_27:.2e}, E_t = {Et_mean_27:.2e}, T = {T_mean_27:.2e}, P = {P_mean_27:.2e}")
 
@@ -513,7 +516,7 @@ for step in range(steps_dt):
         Ep = U_dt * epsilon / N
         Et = Ek + Ep
         P = presion(T, virial_dt, V, N)
-        vcm = np.linalg.norm(velocidad_cm(vel_dt))
+        vcm = velocidad_cm(vel_dt)
         Ek_list_dt.append(Ek)
         Ep_list_dt.append(Ep)
         Et_list_dt.append(Et)
@@ -523,7 +526,7 @@ for step in range(steps_dt):
         
         for i, idx in enumerate(particulas_seleccionadas_dt):
             particulas_pos_dt[i].append(pos_dt[idx].copy())
-            particulas_vel_dt[i].append(vel_dt[idx].copy() * np.sqrt(epsilon / m) / sigma)
+            particulas_vel_dt[i].append(vel_dt[idx].copy() * vel_factor)
         
         if step in safe_steps_dt:
             instantes_dt.append(pos_dt.copy())
@@ -536,46 +539,39 @@ df_dt = pd.DataFrame({
 })
 df_dt.to_excel("resultados_dt_large.xlsx", index=False)
 
-Ek_mean_dt = np.mean(Ek_list_dt)
-Ep_mean_dt = np.mean(Ep_list_dt)
-Et_mean_dt = np.mean(Ek_list_dt)
-T_mean_dt = np.mean(T_list_dt)
-P_mean_dt = np.mean(P_list_dt)
-
-
 block_sizes = [1, 2, 5, 10, 20]
-Ek_varianzas = block_analisis(df['E_k'], block_sizes)
-Ep_varianzas = block_analisis(df['E_p'], block_sizes)
-Et_varianzas = block_analisis(df['E_t'], block_sizes)
-T_varianzas = block_analisis(df['T'], block_sizes)
-P_varianzas = block_analisis(df['P'], block_sizes)
+Ek_varianzas_dt = block_analisis(df_dt['E_k'], block_sizes)
+Ep_varianzas_dt = block_analisis(df_dt['E_p'], block_sizes)
+Et_varianzas_dt = block_analisis(df_dt['E_t'], block_sizes)
+T_varianzas_dt = block_analisis(df_dt['T'], block_sizes)
+P_varianzas_dt = block_analisis(df_dt['P'], block_sizes)
 
 block_size = 2
-Ek_mean = np.mean(df['E_k'])
-Ek_err = np.sqrt(Ek_varianzas[block_sizes.index(block_size)])
-Ep_mean = np.mean(df['E_p'])
-Ep_err = np.sqrt(Ep_varianzas[block_sizes.index(block_size)])
-Et_mean = np.mean(df['E_t'])
-Et_err = np.sqrt(Et_varianzas[block_sizes.index(block_size)])
-T_mean = np.mean(df['T'])
-T_err = np.sqrt(T_varianzas[block_sizes.index(block_size)])
-P_mean = np.mean(df['P'])
-P_err = np.sqrt(P_varianzas[block_sizes.index(block_size)])
+Ek_mean_dt = np.mean(df_dt['E_k'])
+Ek_err_dt = np.sqrt(Ek_varianzas_dt[block_sizes.index(block_size)])
+Ep_mean_dt = np.mean(df_dt['E_p'])
+Ep_err_dt = np.sqrt(Ep_varianzas_dt[block_sizes.index(block_size)])
+Et_mean_dt = np.mean(df_dt['E_t'])
+Et_err_dt = np.sqrt(Et_varianzas_dt[block_sizes.index(block_size)])
+T_mean_dt = np.mean(df_dt['T'])
+T_err_dt = np.sqrt(T_varianzas_dt[block_sizes.index(block_size)])
+P_mean_dt = np.mean(df_dt['P'])
+P_err_dt = np.sqrt(P_varianzas_dt[block_sizes.index(block_size)])
 
 df3 = pd.DataFrame({
-    "Ek_mean": [Ek_mean], "Ek_err": [Ek_err], "Ek_varianza": [Ek_varianzas[block_sizes.index(block_size)]],
-    "Ep_mean": [Ep_mean], "Ep_err": [Ep_err], "Ep_varianza": [Ep_varianzas[block_sizes.index(block_size)]],
-    "Et_mean": [Et_mean], "Et_err": [Et_err], "Et_varianza": [Et_varianzas[block_sizes.index(block_size)]],
-    "T_mean": [T_mean], "T_err": [T_err], "T_varianza": [T_varianzas[block_sizes.index(block_size)]],
-    "P_mean": [P_mean], "P_err": [P_err], "P_varianza": [P_varianzas[block_sizes.index(block_size)]]
+    "Ek_mean": [Ek_mean_dt], "Ek_err": [Ek_err_dt], "Ek_varianza": [Ek_varianzas_dt[block_sizes.index(block_size)]],
+    "Ep_mean": [Ep_mean_dt], "Ep_err": [Ep_err_dt], "Ep_varianza": [Ep_varianzas_dt[block_sizes.index(block_size)]],
+    "Et_mean": [Et_mean_dt], "Et_err": [Et_err_dt], "Et_varianza": [Et_varianzas_dt[block_sizes.index(block_size)]],
+    "T_mean": [T_mean_dt], "T_err": [T_err_dt], "T_varianza": [T_varianzas_dt[block_sizes.index(block_size)]],
+    "P_mean": [P_mean_dt], "P_err": [P_err_dt], "P_varianza": [P_varianzas_dt[block_sizes.index(block_size)]]
 })
 df3.to_excel("Medias_y_varianzas_dt_large.xlsx", index=False)
 
-print(f"Energía cinética media: {Ek_mean:.2e} ± {Ek_err:.2e} J/partícula")
-print(f"Energía potencial media: {Ep_mean:.2e} ± {Ep_err:.2e} J/partícula")
-print(f"Energía total media: {Et_mean:.2e} ± {Et_err:.2e} J/partícula")
-print(f"Temperatura media: {T_mean:.2e} ± {T_err:.2e} K")
-print(f"Presión media: {P_mean:.2e} ± {P_err:.2e} Pa")
+print(f"Energía cinética media: {Ek_mean_dt:.2e} ± {Ek_err_dt:.2e} J/partícula")
+print(f"Energía potencial media: {Ep_mean_dt:.2e} ± {Ep_err_dt:.2e} J/partícula")
+print(f"Energía total media: {Et_mean_dt:.2e} ± {Et_err_dt:.2e} J/partícula")
+print(f"Temperatura media: {T_mean_dt:.2e} ± {T_err_dt:.2e} K")
+print(f"Presión media: {P_mean_dt:.2e} ± {P_err_dt:.2e} Pa")
 
 Et_fluctuacion_dt = np.std(df_dt['E_t']) / abs(np.mean(df_dt['E_t']))
 print(f"Fluctuación relativa de la energía total (dt=10^-9 s): {Et_fluctuacion_dt:.2e}")
