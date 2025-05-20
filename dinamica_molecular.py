@@ -335,6 +335,24 @@ for step in range(steps):
 particulas_pos = [np.array(pos_list) for pos_list in particulas_pos]
 particulas_vel = [np.array(vel_list) for vel_list in particulas_vel]
 
+# Detección de convergencia automática
+tconv = None
+for i in range(len(Et_list) - 2):
+    if abs(Et_list[i] - Et_list[i+1]) <= 10 and abs(T_list[i] - T_list[i+1]) <= 1e23 and abs(P_list[i] - P_list[i+1]) <= 1e28:
+        consistencia = all(
+            abs(Et_list[i] - Et_list[i+j+1]) <= 10 and
+            abs(T_list[i] - T_list[i+j+1]) <= 1e23 and
+            abs(P_list[i] - P_list[i+j+1]) <= 1e28
+            for j in range(min(20, len(Et_list) - i - 1))
+        )
+        if consistencia:
+            tconv = i * intervalo * dt * 1e12  # tiempo en ps
+            print(f"El tiempo de convergencia es {tconv} ps.")
+            break
+if tconv is None:
+    print("No se detectó convergencia en la simulación principal.")
+    tconv = "No converge"
+
 df = pd.DataFrame({
     "E_k": Ek_list, "E_p": Ep_list, "E_t": Et_list, "T": T_list, "P": P_list, "v_cm": vcm_list
 })
@@ -360,7 +378,7 @@ P_mean = np.mean(df['P'])
 P_err = np.sqrt(P_varianzas[block_sizes.index(block_size)])
 
 Et_fluctuacion = np.std(df['E_t']) / abs(np.mean(df['E_t']))
-print(f"Fluctuación relativa de la energía total: {Et_fluctuacion:.2e} (debería ser pequeña, e.g., < 0.01)")
+print(f"Fluctuación relativa de la energía total: {Et_fluctuacion:.2e}")
 
 df1 = pd.DataFrame({
     "Ek_mean": [Ek_mean], "Ek_err": [Ek_err], "Ek_varianza": [Ek_varianzas[block_sizes.index(block_size)]],
@@ -432,6 +450,24 @@ for step in range(steps_27):
 
 particulas_pos_27 = [np.array(pos_list) for pos_list in particulas_pos_27]
 particulas_vel_27 = [np.array(vel_list) for vel_list in particulas_vel_27]
+
+# Detección de convergencia automática
+tconv = None
+for i in range(len(Et_list_27) - 2):
+    if abs(Et_list_27[i] - Et_list_27[i+1]) <= 10 and abs(T_list_27[i] - T_list_27[i+1]) <= 1e23 and abs(P_list_27[i] - P_list_27[i+1]) <= 1e28:
+        consistencia = all(
+            abs(Et_list_27[i] - Et_list_27[i+j+1]) <= 10 and
+            abs(T_list_27[i] - T_list_27[i+j+1]) <= 1e23 and
+            abs(P_list_27[i] - P_list_27[i+j+1]) <= 1e28
+            for j in range(min(20, len(Et_list_27) - i - 1))
+        )
+        if consistencia:
+            tconv = i * intervalo * dt * 1e12  # tiempo en ps
+            print(f"El tiempo de convergencia es {tconv} ps.")
+            break
+if tconv is None:
+    print("No se detectó convergencia en la simulación principal.")
+    tconv = "No converge"
 
 df_27 = pd.DataFrame({
     "E_k": Ek_list_27, "E_p": Ep_list_27, "E_t": Et_list_27, "T": T_list_27, "P": P_list_27, "v_cm": vcm_list_27
@@ -533,6 +569,24 @@ for step in range(steps_dt):
 
 particulas_pos_dt = [np.array(pos_list) for pos_list in particulas_pos_dt]
 particulas_vel_dt = [np.array(vel_list) for vel_list in particulas_vel_dt]
+
+# Detección de convergencia automática
+tconv = None
+for i in range(len(Et_list_dt) - 2):
+    if abs(Et_list_dt[i] - Et_list_dt[i+1]) <= 10 and abs(T_list_dt[i] - T_list_dt[i+1]) <= 1e23 and abs(P_list_dt[i] - P_list_dt[i+1]) <= 1e28:
+        consistencia = all(
+            abs(Et_list_dt[i] - Et_list_dt[i+j+1]) <= 10 and
+            abs(T_list_dt[i] - T_list_dt[i+j+1]) <= 1e23 and
+            abs(P_list_dt[i] - P_list_dt[i+j+1]) <= 1e28
+            for j in range(min(20, len(Et_list_dt) - i - 1))
+        )
+        if consistencia:
+            tconv = i * intervalo * dt * 1e12  # tiempo en ps
+            print(f"El tiempo de convergencia es {tconv} ps.")
+            break
+if tconv is None:
+    print("No se detectó convergencia en la simulación principal.")
+    tconv = "No converge"
 
 df_dt = pd.DataFrame({
     "E_k": Ek_list_dt, "E_p": Ep_list_dt, "E_t": Et_list_dt, "T": T_list_dt, "P": P_list_dt, "v_cm": vcm_list_dt
